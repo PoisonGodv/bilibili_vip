@@ -1,6 +1,6 @@
 from client.senior import captcha_get, captcha_submit, category_get, question_get, question_submit
 from tools.logger import logger
-from tools.LLM.gemini import GeminiAPI
+from tools.LLM.model_manager import ModelManager
 from time import sleep
 
 class QuizSession:
@@ -9,6 +9,7 @@ class QuizSession:
         self.answers = None
         self.question_num = 0
         self.question = None
+        self.model_manager = ModelManager()
 
     def start(self):
         """开始答题会话"""
@@ -20,16 +21,19 @@ class QuizSession:
                 
                 # 显示题目信息
                 self.display_question()
-                llm = GeminiAPI()
-                answer = llm.ask(self.get_question_prompt())
-                logger.info('AI给出的答案:{}'.format(answer))
                 try:
-                    answer = int(answer)
-                    if not (1 <= answer <= len(self.answers)):
-                        logger.warning(f"无效的答案序号: {answer}")
+                    answer = self.model_manager.ask(self.get_question_prompt())
+                    logger.info('AI给出的答案:{}'.format(answer))
+                    try:
+                        answer = int(answer)
+                        if not (1 <= answer <= len(self.answers)):
+                            logger.warning(f"无效的答案序号: {answer}")
+                            continue
+                    except ValueError:
+                        logger.warning("AI回复其他内容,正在重试")
                         continue
-                except ValueError:
-                    logger.warning("AI回复其他内容,正在重试")
+                except Exception as e:
+                    logger.error(f"AI模型调用失败: {str(e)}")
                     continue
 
                 result = self.answers[answer-1]
@@ -40,6 +44,7 @@ class QuizSession:
             logger.info("答题会话已终止")
         except Exception as e:
             logger.error(f"答题过程发生错误: {str(e)}")
+
     def get_question(self):
         """获取题目
         
